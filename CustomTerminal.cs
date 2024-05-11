@@ -74,6 +74,7 @@ namespace comsec
             TEXT_COLOUR = Color.Black;
             INPUT_COLOUR = Color.LightGray; //input colour
             WindowUpdateThread();
+
         }
 
         private void WindowUpdateThread()
@@ -84,6 +85,7 @@ namespace comsec
             Raylib.InitWindow(WIDTH, HEIGHT, WINDOWTEXT);
             INIT = true;
 
+            int scrolloffset = 0;
             float HoldDeleteFrames = 1000, DeleteSpeed = 80, TypeCooldown = 20;
             //private int currlines;
             float t = 0, e = 0, x = 0, flashcd = 1000;
@@ -98,9 +100,12 @@ namespace comsec
                 WIDTH = Raylib.GetScreenWidth();
                 HEIGHT = Raylib.GetScreenHeight();
 
+                var scroll = Raylib.GetMouseWheelMoveV().Y*4;
+                if (scrolloffset < 0) { scrolloffset = 0; }
+                if((HEIGHT - 50 - (20*(MESSAGES.Count+1)) + scrolloffset + (int) scroll < 0)) { scrolloffset += (int)scroll; }
                 for (int i = 0; i < MESSAGES.Count; i++)
                 {
-                    Raylib.DrawText(MESSAGES[i], 10, HEIGHT - 50 - (20 * (i + 1)), 20, TEXT_COLOUR);
+                    Raylib.DrawText(MESSAGES[i], 10, HEIGHT - 50 - (20 * (i + 1)) + scrolloffset, 20, TEXT_COLOUR);
                 }
 
                 #region Input field
@@ -108,7 +113,14 @@ namespace comsec
                 if (GetKeyDown(KeyboardKey.Right)) { cursor = true; flashcd = 500; cursorPos--; if (cursorPos < 0) { cursorPos = CurrText.Length; } }
 
                 List<char> stuff = Inputed || !RecievingInput ? new() : GetCharsPressed; //pause input while waiting for return just in case, and also pause if we arent waiting for input
-                if (stuff.Count > 0 && x <= 0 && CurrText.Length <= MaxLength) { x = TypeCooldown; CurrText = CurrText.Insert(CurrText.Length - cursorPos, new string(stuff.ToArray())); }
+                if(!GetKey(KeyboardKey.Menu) && !GetKey(KeyboardKey.LeftControl) && !GetKey(KeyboardKey.RightControl))
+                {
+                    if (stuff.Count > 0 && x <= 0 && CurrText.Length <= MaxLength) { x = TypeCooldown; CurrText = CurrText.Insert(CurrText.Length - cursorPos, new string(stuff.ToArray())); }
+                }
+                else
+                {
+                    if(stuff.Count > 0 && stuff.Contains('v')) { x = TypeCooldown; CurrText = CurrText.Insert(CurrText.Length - cursorPos, Raylib.GetClipboardText_()); }
+                }
                 if(CurrText.Length>=1 && KeyInput) { Inputed = true; cursorPos = 0; }
                 x--;
                 if (!Inputed && cursorPos!=CurrText.Length && (GetKeyDown(KeyboardKey.Backspace) || GetKeyDown(KeyboardKey.Delete)) && CurrText.Length > 0) { if (cursorPos == 0) { CurrText = CurrText[..^1]; } else { CurrText = CurrText.Remove(CurrText.Length - 1 - cursorPos, 1); } }
