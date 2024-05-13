@@ -219,7 +219,7 @@ class Program
             Selection();
             return;
         }
-        else { TERMINAL.Clear(); TERMINAL.Output("Enter 1-3 please. Press any key to restart."); _ = TERMINAL.InputKey(); Settings(); return; }
+        else { TERMINAL.Clear(); TERMINAL.Output("Enter 1-3 please. Press any key to restart."); _ = TERMINAL.InputKey(); TERMINAL.Clear(); Settings(); return; }
     }
 
     private static void StartServer(bool multithread = false)
@@ -282,15 +282,26 @@ class Program
         int totallen = 0;
         while (true)
         {
-            if (CLIENTS[id].ClientDisconnecting) { return; }
-            if (SERVER_SOCKET == null) { return; }
-            if (!CLIENTS[id].socket.Connected) { return; }
-            var bytes = new byte[1024];
-            int bytesRec = CLIENTS[id].socket.Receive(bytes);
-            if (bytesRec <= 0) { break; }
-            Array.Copy(bytes, 0, buffer, totallen, bytesRec);
-            totallen += bytesRec;
-            if (Encoding.ASCII.GetString(buffer, 1, totallen - 1).IndexOf("\r") != -1) { break; }//look for EOF
+            try
+            {
+                if (CLIENTS[id].ClientDisconnecting) { return; }
+                if (SERVER_SOCKET == null) { return; }
+                if (!CLIENTS[id].socket.Connected) { return; }
+                var bytes = new byte[1024];
+                int bytesRec = CLIENTS[id].socket.Receive(bytes);
+                if (bytesRec <= 0) { break; }
+                Array.Copy(bytes, 0, buffer, totallen, bytesRec);
+                totallen += bytesRec;
+                if (Encoding.ASCII.GetString(buffer, 1, totallen - 1).IndexOf("\r") != -1) { break; }//look for EOF
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine(e.ToString());
+                Console.WriteLine("Client "+CLIENTS[id].Username+" Disconnected with error. Press any key to continue.");
+                CLIENTS[id].socket.Shutdown(SocketShutdown.Both);
+                CLIENTS[id].socket.Disconnect(false);
+                return;
+            }
         }
         if (totallen <= 0) { ListenForMessage(data); return; }
         switch (buffer[0]) //first byte of any message is the identifier
@@ -522,7 +533,12 @@ class Program
             }
             catch(Exception e)
             {
-                //Console.WriteLine(e.ToString());
+                Console.WriteLine(e.ToString());
+                TERMINAL.Clear();
+                TERMINAL.Output("Disconnected with error! Press any key to continue.");
+                TERMINAL.InputKey();
+                TERMINAL.Clear();
+                Selection();
                 return;
             }
         }

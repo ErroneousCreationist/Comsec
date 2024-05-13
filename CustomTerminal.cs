@@ -113,13 +113,13 @@ namespace comsec
                 if (GetKeyDown(KeyboardKey.Right)) { cursor = true; flashcd = 500; cursorPos--; if (cursorPos < 0) { cursorPos = CurrText.Length; } }
 
                 List<char> stuff = Inputed || !RecievingInput ? new() : GetCharsPressed; //pause input while waiting for return just in case, and also pause if we arent waiting for input
-                if(!GetKey(KeyboardKey.Menu) && !GetKey(KeyboardKey.LeftControl) && !GetKey(KeyboardKey.RightControl))
+                if(!GetKey(KeyboardKey.LeftControl) && !GetKey(KeyboardKey.RightControl))
                 {
                     if (stuff.Count > 0 && x <= 0 && CurrText.Length <= MaxLength) { x = TypeCooldown; CurrText = CurrText.Insert(CurrText.Length - cursorPos, new string(stuff.ToArray())); }
                 }
                 else
                 {
-                    if(stuff.Count > 0 && stuff.Contains('v')) { x = TypeCooldown; CurrText = CurrText.Insert(CurrText.Length - cursorPos, Raylib.GetClipboardText_()); }
+                    if(GetKeyDown(KeyboardKey.V)) { x = TypeCooldown; CurrText = CurrText.Insert(CurrText.Length - cursorPos, Raylib.GetClipboardText_()); }
                 }
                 if(CurrText.Length>=1 && KeyInput) { Inputed = true; cursorPos = 0; }
                 x--;
@@ -223,7 +223,8 @@ namespace comsec
         public void SetBackgroundColour(Color col)
         {
             BACKGROUND_COLOUR = col;
-            Raylib.SetWindowOpacity(col.A / 255f);
+            if (col.A > 0 && col.A <= 255) { Raylib.SetWindowOpacity(col.A / 255f); }
+            else { Raylib.SetWindowOpacity(255f); }
         }
 
         /// <summary>
