@@ -237,7 +237,10 @@ class Program
         //start the thread for listening for messages on the server. 
         StartServer(true);
 
-        Thread.Sleep(10); //hold on a moment
+        while (SERVER_SOCKET==null || !SERVER_SOCKET.IsBound)
+        {
+            Thread.Sleep(10); //hold on a moment
+        }
         //now start our client and send our starting message. then, we do the chatroom thing
         StartClientJoin(true);
     }
@@ -271,6 +274,7 @@ class Program
         catch (Exception e)
         {
             Console.WriteLine(e.ToString());
+            if(e is SocketException) { Console.WriteLine("ERRORCODE="+(e as SocketException).ErrorCode); }
         }
     }
 
@@ -478,6 +482,7 @@ class Program
                             CLIENTS[i].socket.Close();
                         }
                         CLIENTS = new List<ConnectedClient>();
+                        SERVER_SOCKET.Dispose();
                         SERVER_SOCKET = null;
                         TERMINAL.Output("---------------------------------------------");
                         TERMINAL.Output("Closed server, press any key to continue.");
@@ -551,12 +556,7 @@ class Program
             catch(Exception e)
             {
                 Console.WriteLine(e.ToString());
-                TERMINAL.Clear();
-                TERMINAL.Output("Disconnected with error! Press any key to continue.");
-                TERMINAL.InputKey();
-                TERMINAL.Clear();
-                Selection();
-                return;
+                continue;
             }
         }
         switch (buffer[0]) //first byte of any message is the identifier

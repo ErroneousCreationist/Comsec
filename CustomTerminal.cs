@@ -165,7 +165,7 @@ namespace comsec
                 {
                     Raylib.DrawRectangle(0, HEIGHT - 30, WIDTH, 30, INPUT_COLOUR);
                     string textbeforecursor = CurrText[..^cursorPos];
-                    if (cursor) { Raylib.DrawRectangle(cursorPos == CurrText.Length ? 0 : (int)Raylib.MeasureTextEx(font, textbeforecursor, 30, 1).X, HEIGHT - 30, 5, 30, new Color((int)(INPUT_COLOUR.R * 0.5f), (int)(INPUT_COLOUR.G * 0.5f), (int)(INPUT_COLOUR.B * 0.5f), INPUT_COLOUR.A)); }
+                    if (cursor) { Raylib.DrawRectangle(cursorPos == CurrText.Length ? 0 : (int)Raylib.MeasureTextEx(font, textbeforecursor, 30, 1).X + (int)Raylib.MeasureTextEx(font, textbeforecursor[^1].ToString(), 30, 1).X/2, HEIGHT - 30, 5, 30, new Color((int)(INPUT_COLOUR.R * 0.5f), (int)(INPUT_COLOUR.G * 0.5f), (int)(INPUT_COLOUR.B * 0.5f), INPUT_COLOUR.A)); }
                     Raylib.DrawTextEx(font, CurrText, new System.Numerics.Vector2(10, HEIGHT - 30), 30, 1, TEXT_COLOUR);
                 }
                 if ((GetKeyDown(KeyboardKey.Enter) || GetKeyDown(KeyboardKey.KpEnter)) && !string.IsNullOrWhiteSpace(CurrText))
