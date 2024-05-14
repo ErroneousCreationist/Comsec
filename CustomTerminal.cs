@@ -19,6 +19,7 @@ namespace comsec
         public bool INIT;
         public static CustomTerminal? TERMINAL; //there can only be one so this is fine
         private Color BACKGROUND_COLOUR, TEXT_COLOUR, INPUT_COLOUR;
+        public static Dictionary<string,Texture2D>? EMOJIS;
 
         #region Helper funcs
         private static bool GetKeyDown(KeyboardKey key)
@@ -40,11 +41,12 @@ namespace comsec
         {
             get
             {
-                List<char> returned = new List<char>();
+                List<char> returned = new();
                 while (true)
                 {
                     int i = Raylib.GetCharPressed();
                     if (i == 0) { break; }
+                    //Console.WriteLine((char)i);
                     returned.Add((char)i);
                 }
                 return returned;
@@ -85,6 +87,25 @@ namespace comsec
             Raylib.InitWindow(WIDTH, HEIGHT, WINDOWTEXT);
             INIT = true;
 
+            Font font = Raylib.GetFontDefault();
+            if (!Directory.Exists(AppContext.BaseDirectory + "/resources")) { EMOJIS = new(); Console.WriteLine("Uh oh, resources directory is missing, thats not good."); }
+            else
+            {
+                if (!File.Exists(AppContext.BaseDirectory + "/resources/font.ttf")) { Console.WriteLine("No font found (resources/font.ttf), using fallback."); }
+                else { font = Raylib.LoadFont("resources/font.ttf"); }
+
+                if (!Directory.Exists(AppContext.BaseDirectory + "/resources/emojis")) { EMOJIS = new(); Console.WriteLine("Uh oh, emojis directory is missing, thats not good."); }
+                else
+                {
+                    EMOJIS = new();
+                    foreach (var item in Directory.EnumerateFiles(AppContext.BaseDirectory + "/resources/emojis"))
+                    {
+                        //Console.WriteLine(item + " \\ "+ )
+                        EMOJIS.Add(Path.GetFileName(item).Split(".")[0].ToLower().Replace(" ","").Replace("-",""), Raylib.LoadTexture("resources/emojis/" + Path.GetFileName(item))); //add the emoji name to the list
+                    }
+                }
+            }
+
             int scrolloffset = 0;
             float HoldDeleteFrames = 1000, DeleteSpeed = 80, TypeCooldown = 20;
             //private int currlines;
@@ -105,7 +126,17 @@ namespace comsec
                 if((HEIGHT - 50 - (20*(MESSAGES.Count+1)) + scrolloffset + (int) scroll < 0)) { scrolloffset += (int)scroll; }
                 for (int i = 0; i < MESSAGES.Count; i++)
                 {
-                    Raylib.DrawText(MESSAGES[i], 10, HEIGHT - 50 - (20 * (i + 1)) + scrolloffset, 20, TEXT_COLOUR);
+                    //its an emoji, render it as such
+                    if (MESSAGES[i].Split(' ').Length==3 && MESSAGES[i].Split(' ')[1] == "/emoji" && EMOJIS.ContainsKey(MESSAGES[i].Split(' ')[2].ToLower()))
+                    {
+                        string str = MESSAGES[i].Split(' ')[0];
+                        Raylib.DrawTextEx(font, str, new System.Numerics.Vector2(10, HEIGHT - 50 - (20 * (i + 1)) + scrolloffset), 20, 1, TEXT_COLOUR);
+                        var width = (int)Raylib.MeasureTextEx(font, str, 30, 1).X;
+
+                        var tex = EMOJIS[MESSAGES[i].Split(' ')[2].ToLower()];
+                        Raylib.DrawTextureEx(tex, new System.Numerics.Vector2(width-20, HEIGHT - 50 - (20 * (i + 1)) + scrolloffset), 0, 20f / tex.Height, Color.White);
+                    }
+                    else { Raylib.DrawTextEx(font, MESSAGES[i], new System.Numerics.Vector2(10, HEIGHT - 50 - (20 * (i + 1)) + scrolloffset), 20, 1, TEXT_COLOUR); }
                 }
 
                 #region Input field
@@ -124,6 +155,7 @@ namespace comsec
                 if(CurrText.Length>=1 && KeyInput) { Inputed = true; cursorPos = 0; }
                 x--;
                 if (!Inputed && cursorPos!=CurrText.Length && (GetKeyDown(KeyboardKey.Backspace) || GetKeyDown(KeyboardKey.Delete)) && CurrText.Length > 0) { if (cursorPos == 0) { CurrText = CurrText[..^1]; } else { CurrText = CurrText.Remove(CurrText.Length - 1 - cursorPos, 1); } }
+                if(!Inputed && GetKey(KeyboardKey.LeftControl) && (GetKeyDown(KeyboardKey.Backspace) || GetKeyDown(KeyboardKey.Delete))) { CurrText = ""; cursorPos = 0; e = DeleteSpeed; } //delete eveerything
                 if (!Inputed && cursorPos != CurrText.Length &&(GetKey(KeyboardKey.Backspace) || GetKey(KeyboardKey.Delete))) { t++; if (t >= HoldDeleteFrames && CurrText.Length > 0) { e--; if (e <= 0) { e = DeleteSpeed; if (cursorPos == 0) { CurrText = CurrText[..^1]; } else { CurrText = CurrText.Remove(CurrText.Length - 1 - cursorPos, 1); } } } }
                 else { t = 0; }
                 if (cursorPos > CurrText.Length) { cursorPos = CurrText.Length; }
@@ -133,11 +165,12 @@ namespace comsec
                 {
                     Raylib.DrawRectangle(0, HEIGHT - 30, WIDTH, 30, INPUT_COLOUR);
                     string textbeforecursor = CurrText[..^cursorPos];
-                    if (cursor) { Raylib.DrawRectangle(cursorPos == CurrText.Length ? 0 : Raylib.MeasureText(textbeforecursor, 30) + (Raylib.MeasureText(textbeforecursor[^1].ToString(), 30)), HEIGHT - 30, 5, 30, new Color((int)(INPUT_COLOUR.R * 0.5f), (int)(INPUT_COLOUR.G * 0.5f), (int)(INPUT_COLOUR.B * 0.5f), INPUT_COLOUR.A)); }
-                    Raylib.DrawText(CurrText, 10, HEIGHT - 30, 30, TEXT_COLOUR);
+                    if (cursor) { Raylib.DrawRectangle(cursorPos == CurrText.Length ? 0 : (int)Raylib.MeasureTextEx(font, textbeforecursor, 30, 1).X, HEIGHT - 30, 5, 30, new Color((int)(INPUT_COLOUR.R * 0.5f), (int)(INPUT_COLOUR.G * 0.5f), (int)(INPUT_COLOUR.B * 0.5f), INPUT_COLOUR.A)); }
+                    Raylib.DrawTextEx(font, CurrText, new System.Numerics.Vector2(10, HEIGHT - 30), 30, 1, TEXT_COLOUR);
                 }
-                if ((GetKeyDown(KeyboardKey.Enter) || GetKeyDown(KeyboardKey.KpEnter)) && !string.IsNullOrWhiteSpace(CurrText) && !KeyInput)
+                if ((GetKeyDown(KeyboardKey.Enter) || GetKeyDown(KeyboardKey.KpEnter)) && !string.IsNullOrWhiteSpace(CurrText))
                 {
+                    if (KeyInput) { CurrText = "\n"; }
                     Inputed = true;
                     cursorPos = 0;
                 }
@@ -155,6 +188,7 @@ namespace comsec
         /// </summary>
         public void Close()
         {
+            Raylib.EndDrawing();
             Raylib.CloseWindow();
             Environment.Exit(0);
         }
@@ -223,8 +257,16 @@ namespace comsec
         public void SetBackgroundColour(Color col)
         {
             BACKGROUND_COLOUR = col;
-            if (col.A > 0 && col.A <= 255) { Raylib.SetWindowOpacity(col.A / 255f); }
-            else { Raylib.SetWindowOpacity(255f); }
+            try
+            {
+                if (col.A <= 100) { col.A = 100; }
+                if (col.A > 0 && col.A <= 255) { Raylib.SetWindowOpacity(col.A / 255f); }
+                else { Raylib.SetWindowOpacity(255f); }
+            }
+            catch
+            {
+                Console.WriteLine("Window opacity screwed up??");
+            }
         }
 
         /// <summary>

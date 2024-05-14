@@ -65,6 +65,8 @@ class Program
     //(in username) and THEN get a reference to it. ffs
     static void Main(string[] args)
     {
+        Console.InputEncoding = Encoding.Unicode;
+        Console.OutputEncoding = Encoding.Unicode;
         ARGS = args;
         CLIENTS = new();
         if (args.Length == 1)
@@ -72,7 +74,6 @@ class Program
             if (args[0] != "-server") { return; }
             else { StartServer(); return; }
         }
-
         Thread thr = new(Username);
         thr.Start();
         _ = new CustomTerminal(WIDTH, HEIGHT, $"COMSEC VERSION {VERSION}");
@@ -292,7 +293,7 @@ class Program
                 if (bytesRec <= 0) { break; }
                 Array.Copy(bytes, 0, buffer, totallen, bytesRec);
                 totallen += bytesRec;
-                if (Encoding.ASCII.GetString(buffer, 1, totallen - 1).IndexOf("\r") != -1) { break; }//look for EOF
+                if (buffer.Contains((byte)'\r')) { break; }//look for EOF
             }
             catch(Exception e)
             {
@@ -308,7 +309,7 @@ class Program
         {
             case CLIENT_CONNECTED_CODE:
                 {
-                    Console.WriteLine(Encoding.ASCII.GetString(buffer, 1, totallen - 2) + " Connected");
+                    Console.WriteLine(Encoding.Unicode.GetString(buffer, 1, totallen - 2) + " Connected");
                     buffer[0] = RECIEVE_CLIENT_JOIN_CODE;
                     byte[] sent = new byte[totallen];
                     Array.Copy(buffer, sent, totallen);
@@ -329,10 +330,10 @@ class Program
                         if (CLIENTS[i].ClientDisconnecting) { continue; }//yeah well we can't just remove them from the list so im going to have to compromise :skull:
                         fulllist += CLIENTS[i].Username + "\\";
                     }
-                    fulllist = fulllist[..^1] + '\r';
-                    byte[] sent = new byte[fulllist.Length+1];
+                    byte[] sent = new byte[fulllist.Length+2];
                     sent[0] = RECIEVE_CLIENT_LIST_CODE;
-                    Array.Copy(Encoding.ASCII.GetBytes(fulllist), 0, sent, 1, fulllist.Length);
+                    sent[^1] = (byte)'\r';
+                    Array.Copy(Encoding.Unicode.GetBytes(fulllist), 0, sent, 1, fulllist.Length);
                     CLIENTS[id].socket.Send(sent);
                     break;
                 }
@@ -351,7 +352,7 @@ class Program
                     break;
                 }
             case CLIENT_LEFT_CODE:
-                Console.WriteLine(Encoding.ASCII.GetString(buffer, 1, totallen - 2) + " Disconnected");
+                Console.WriteLine(Encoding.Unicode.GetString(buffer, 1, totallen - 2) + " Disconnected");
                 {
                     buffer[0] = RECIEVE_CLIENT_LEFT_CODE;
                     byte[] sent = new byte[totallen];
@@ -438,9 +439,10 @@ class Program
 
             // send connected message
             {
-                var username = Encoding.ASCII.GetBytes(USERNAME + "\r"); //make sure to add the required EOF character (ascii 26)
-                var message = new byte[username.Length + 1];
+                var username = Encoding.Unicode.GetBytes(USERNAME); //make sure to add the required EOF character (ascii 26)
+                var message = new byte[username.Length + 2];
                 message[0] = CLIENT_CONNECTED_CODE;
+                message[^1] = (byte)'\r';
                 Array.Copy(username, 0, message, 1, username.Length);
                 int byteSent = CLIENT_SOCKET.Send(message);
             }
@@ -457,9 +459,10 @@ class Program
 
                 if (CurrText == "/leave")
                 {
-                    var message = Encoding.ASCII.GetBytes(USERNAME + "\r");
-                    var final = new byte[message.Length + 1];
+                    var message = Encoding.Unicode.GetBytes(USERNAME);
+                    var final = new byte[message.Length + 2];
                     final[0] = CLIENT_LEFT_CODE;
+                    final[^1] = (byte)'\r';
                     Array.Copy(message, 0, final, 1, message.Length);
                     int byteSent = CLIENT_SOCKET.Send(final);
                     CLIENT_SOCKET.Shutdown(SocketShutdown.Both);
@@ -496,12 +499,26 @@ class Program
                     Array.Copy(message, 0, final, 1, message.Length);
                     int byteSent = CLIENT_SOCKET.Send(final);
                 }
+                else if(CurrText.Split(' ')[0] == "/emoji")
+                {
+                    if (!CustomTerminal.EMOJIS.ContainsKey(CurrText.Split(' ')[1])) { TERMINAL.Output("No emoji called " + CurrText.Split(' ')[1]); continue; }
+                    else
+                    {
+                        var message = Encoding.Unicode.GetBytes("[" + USERNAME + "]: " + CurrText);
+                        var final = new byte[message.Length + 2];
+                        final[0] = MESSAGE_SENT_CODE;
+                        final[^1] = (byte)'\r';
+                        Array.Copy(message, 0, final, 1, message.Length);
+                        int byteSent = CLIENT_SOCKET.Send(final);
+                    }
+                }
                 //send a message
                 else
                 {
-                    var message = Encoding.ASCII.GetBytes("[" + USERNAME + "]: " + CurrText + "\r");
-                    var final = new byte[message.Length + 1];
+                    var message = Encoding.Unicode.GetBytes("[" + USERNAME + "]: " + CurrText);
+                    var final = new byte[message.Length + 2];
                     final[0] = MESSAGE_SENT_CODE;
+                    final[^1] = (byte)'\r';
                     Array.Copy(message, 0, final, 1, message.Length);
                     int byteSent = CLIENT_SOCKET.Send(final);
                 }
@@ -529,7 +546,7 @@ class Program
                 if (bytesRec <= 0) { break; }
                 Array.Copy(bytes, 0, buffer, totallen, bytesRec);
                 totallen += bytesRec;
-                if (Encoding.ASCII.GetString(buffer, 1, totallen - 1).IndexOf("\r") != -1) { break; }//look for EOF
+                if (buffer.Contains((byte)'\r')) { break; }//look for EOF
             }
             catch(Exception e)
             {
@@ -557,16 +574,16 @@ class Program
                 //nothing here
                 break;
             case RECIEVE_CLIENT_JOIN_CODE:                
-                TERMINAL.Output(Encoding.ASCII.GetString(buffer, 1, totallen - 2) + " Connected");
+                TERMINAL.Output(Encoding.Unicode.GetString(buffer, 1, totallen - 2) + " Connected");
                 break;
             case RECIEVE_CLIENT_LEFT_CODE:
-                TERMINAL.Output(Encoding.ASCII.GetString(buffer, 1, totallen - 2)+ " Disconnected");
+                TERMINAL.Output(Encoding.Unicode.GetString(buffer, 1, totallen - 2)+ " Disconnected");
                 break;
             case RECIEVE_MESSAGE_CODE:
-                TERMINAL.Output(Encoding.ASCII.GetString(buffer, 1, totallen - 2));
+                TERMINAL.Output(Encoding.Unicode.GetString(buffer, 1, totallen - 2));
                 break;
             case RECIEVE_CLIENT_LIST_CODE:
-                string list = Encoding.ASCII.GetString(buffer, 1, totallen - 2);
+                string list = Encoding.Unicode.GetString(buffer, 1, totallen - 2);
                 TERMINAL.Output("Connected clients: "+list.Replace("\\", ", "));
                 break;
             default:
