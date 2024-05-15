@@ -120,6 +120,7 @@ namespace comsec
                     EMOJIS = new();
                     foreach (var item in Directory.EnumerateFiles(AppContext.BaseDirectory + "/resources/emojis"))
                     {
+                        if(EMOJIS.ContainsKey(Path.GetFileName(item).Split(".")[0].ToLower().Replace(" ", "").Replace("-", ""))) { continue; }
                         //Console.WriteLine(item + " \\ "+ )
                         EMOJIS.Add(Path.GetFileName(item).Split(".")[0].ToLower().Replace(" ","").Replace("-",""), Raylib.LoadTexture("resources/emojis/" + Path.GetFileName(item))); //add the emoji name to the list
                     }
@@ -147,15 +148,15 @@ namespace comsec
                 for (int i = 0; i < MESSAGES.Count; i++)
                 {
                     var ypos = HEIGHT - 50 - (20 * (i + 1)) + scrolloffset;
-                    if(ypos < 0) { return; }
+                    if(ypos < 0) { continue; }
                     //its an emoji, render it as such
-                    if (MESSAGES[i].Split(' ').Length==3 && MESSAGES[i].Split(' ')[1] == "/emoji" && EMOJIS.ContainsKey(MESSAGES[i].Split(' ')[2].ToLower()))
+                    if (MESSAGES[i].Contains(']') && MESSAGES[i].Split(']')[1].Split(' ').Length==3 && MESSAGES[i].Split(']')[1].Split(' ')[1] == "/emoji" && EMOJIS.ContainsKey(MESSAGES[i].Split(']')[1].Split(' ')[2].ToLower()))
                     {
                         string str = MESSAGES[i].Split(' ')[0];
                         Raylib.DrawTextEx(font, str, new System.Numerics.Vector2(10, ypos), 20, 1, TEXT_COLOUR);
                         var width = (int)Raylib.MeasureTextEx(font, str, 30, 1).X;
 
-                        var tex = EMOJIS[MESSAGES[i].Split(' ')[2].ToLower()];
+                        var tex = EMOJIS[MESSAGES[i].Split(']')[1].Split(' ')[2].ToLower()];
                         Raylib.DrawTextureEx(tex, new System.Numerics.Vector2(width-15, ypos), 0, 20f / tex.Height, Color.White);
                     }
                     else { Raylib.DrawTextEx(font, MESSAGES[i], new System.Numerics.Vector2(10, ypos), 20, 1, TEXT_COLOUR); }

@@ -46,6 +46,7 @@ class Program
     private static Socket? SERVER_SOCKET, CLIENT_SOCKET; //client socket is cuz we run server+client at once, for pure clients server_socket is unused
     private static List<ConnectedClient>? CLIENTS;
     private static string[] ARGS;
+    private static int EXCEPTIONLOOPS;
 
     static bool IsClientConnected(Socket client)
     {
@@ -309,7 +310,7 @@ class Program
                 if (bytesRec <= 0) { break; }
                 Array.Copy(bytes, 0, buffer, totallen, bytesRec);
                 totallen += bytesRec;
-                if (buffer.Contains((byte)'\r')) { break; }//look for EOF
+                if (buffer.Contains((byte)'\r') || totallen >= 1024) { break; }//look for EOF
             }
             catch(Exception e)
             {
@@ -320,7 +321,10 @@ class Program
                 return;
             }
         }
-        if (totallen <= 0) { ListenForMessage(data); return; }
+        if (totallen <= 0) {
+            ListenForMessage(data);
+            return;
+        }
         switch (buffer[0]) //first byte of any message is the identifier
         {
             case CLIENT_CONNECTED_CODE:
@@ -349,7 +353,8 @@ class Program
                     byte[] sent = new byte[fulllist.Length+2];
                     sent[0] = RECIEVE_CLIENT_LIST_CODE;
                     sent[^1] = (byte)'\r';
-                    Array.Copy(Encoding.Unicode.GetBytes(fulllist), 0, sent, 1, fulllist.Length);
+                    var listbytes = Encoding.Unicode.GetBytes(fulllist);
+                    Array.Copy(listbytes, 0, sent, 1, listbytes.Length);
                     CLIENTS[id].socket.Send(sent);
                     break;
                 }
@@ -518,9 +523,20 @@ class Program
                     Array.Copy(message, 0, final, 1, message.Length);
                     int byteSent = CLIENT_SOCKET.Send(final);
                 }
-                else if(CurrText.Split(' ')[0] == "/emoji")
+                else if (CurrText.Split(' ')[0] == "/emoji")
                 {
-                    if (!CustomTerminal.EMOJIS.ContainsKey(CurrText.Split(' ')[1])) { TERMINAL.Output("No emoji called " + CurrText.Split(' ')[1]); continue; }
+                    if(CurrText.Split(' ')[1] == "list")
+                    {
+                        TERMINAL.Output("EMOJIS:");
+                        string str = "";
+                        foreach (var emoji in CustomTerminal.EMOJIS)
+                        {
+                            str += emoji.Key;
+                            str += ", ";
+                            if (str.Length >= 40) { TERMINAL.Output(str[..^2]); str = ""; }
+                        }
+                    }
+                    else if (!CustomTerminal.EMOJIS.ContainsKey(CurrText.Split(' ')[1])) { TERMINAL.Output("No emoji called " + CurrText.Split(']')[1].Split(' ')[1]); continue; }
                     else
                     {
                         var message = Encoding.Unicode.GetBytes("[" + USERNAME + "]: " + CurrText);
@@ -537,6 +553,7 @@ class Program
                     TERMINAL.Output("/leave - leaves the server");
                     TERMINAL.Output("/list - lists the clients connected");
                     TERMINAL.Output("/emoji <emoji> - sends an emoji, like 'fire' or 'nerd'");
+                    TERMINAL.Output("/emoji list - lists every emoji (very long!)");
                 }
                 //send a message
                 else
@@ -587,11 +604,13 @@ class Program
                 if (bytesRec <= 0) { break; }
                 Array.Copy(bytes, 0, buffer, totallen, bytesRec);
                 totallen += bytesRec;
-                if (buffer.Contains((byte)'\r')) { break; }//look for EOF
+                if (buffer.Contains((byte)'\r') || totallen >= 1024) { break; }//look for EOF
             }
             catch(Exception e)
             {
                 Console.WriteLine(e.ToString());
+                EXCEPTIONLOOPS++;
+                if (EXCEPTIONLOOPS >= 100) { EXCEPTIONLOOPS = 0; return; }
                 continue;
             }
         }
