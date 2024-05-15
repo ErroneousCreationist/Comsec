@@ -27,7 +27,7 @@ struct ConnectedClient
 
 class Program
 {
-    public const string VERSION = "0.1";
+    public const string VERSION = "0.5";
     private static string? USERNAME;
     private static string? SANITISED_USERNAME;
 
@@ -57,6 +57,19 @@ class Program
         return false;
     }
 
+    private static IPAddress GetLocalIPAddress()
+    {
+        var host = Dns.GetHostEntry(Dns.GetHostName());
+        foreach (var ip in host.AddressList)
+        {
+            if (ip.AddressFamily == AddressFamily.InterNetwork)
+            {
+                return ip;
+            }
+        }
+        throw new Exception("No network adapters with an IPv4 address in the system!");
+    }
+
     //yes I know this is goofy as fuck, but hear me out.
     //RAYLIB window screws up if its not on the main thread for some reason
     //so I literally have to start a new thread for everything and run raylib
@@ -76,7 +89,7 @@ class Program
         }
         Thread thr = new(Username);
         thr.Start();
-        _ = new CustomTerminal(WIDTH, HEIGHT, $"COMSEC VERSION {VERSION}");
+        _ = new CustomTerminal(WIDTH, HEIGHT, $"COMSEC VERSION {VERSION}", Client_OnClosedClient);
     }
 
     private static void Username()
@@ -124,11 +137,12 @@ class Program
 
     private static void Selection()
     {
-        TERMINAL.Output($"Press 1 to host room, Press 2 to join room, Press 3 to change settings");
+        TERMINAL.Output($"Press 1 to host room, Press 2 to join room, Press 3 to change settings, Press 4 to change username");
         var clser = TERMINAL.InputKey();
         if (clser == '1') { TERMINAL.Clear(); StartHostRoom(); }
         else if (clser == '2') { TERMINAL.Clear(); StartClientJoin(); }
         else if (clser == '3') { TERMINAL.Clear(); Settings(); }
+        else if(clser == '4') { TERMINAL.Clear(); Username(); }
         else { TERMINAL.Clear(); TERMINAL.Output("Enter a valid option. Press any key to restart."); _ = TERMINAL.InputKey(); TERMINAL.Clear(); Selection(); return; }
     }
 
@@ -250,10 +264,8 @@ class Program
         try
         {
             //start the host here
-            IPHostEntry ipHost = Dns.GetHostEntry(Dns.GetHostName());
-            IPAddress ipAddr = ipHost.AddressList[0];
-            IPEndPoint localEndPoint = new(ipAddr, 11000);
-            SERVER_SOCKET = new(ipAddr.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            IPEndPoint localEndPoint = new(IPAddress.Any, 11000);
+            SERVER_SOCKET = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             SERVER_SOCKET.Bind(localEndPoint);
             SERVER_SOCKET.Listen(100);
 
@@ -390,7 +402,7 @@ class Program
 
     private static void StartClientJoin(bool myself = false)
     {
-        IPAddress? address = Dns.GetHostEntry(Dns.GetHostName()).AddressList[0];
+        IPAddress? address = GetLocalIPAddress();
         if (!myself)
         {
             TERMINAL.Output("Enter IP ('exit' to go back, 'localhost' for yourself): ");
@@ -413,7 +425,8 @@ class Program
             //ping the target to ensure a server exists
             Ping ping = new();
             var pr = ping.Send(address);
-            if (pr.Status != IPStatus.Success) {
+            if (pr.Status != IPStatus.Success)
+            {
                 TERMINAL.Clear();
                 TERMINAL.Output("Ip ping failed! Press any key to restart...");
                 _ = TERMINAL.InputKey();
@@ -421,6 +434,7 @@ class Program
                 return;
             }
             if (tempaddress != null) { address = tempaddress; }
+            TERMINAL.Clear();
         }
         try
         {
@@ -431,7 +445,7 @@ class Program
                 CLIENT_SOCKET = new(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
                 CLIENT_SOCKET.Connect(localEndPoint);
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Console.WriteLine(e.ToString());
                 TERMINAL.Clear();
@@ -494,7 +508,7 @@ class Program
                     }
                     _ = TERMINAL.InputKey();
                     TERMINAL.Clear();
-                    Username();
+                    Selection();
                 }
                 else if (CurrText == "/list")
                 {
@@ -517,6 +531,13 @@ class Program
                         int byteSent = CLIENT_SOCKET.Send(final);
                     }
                 }
+                else if(CurrText == "/help")
+                {
+                    TERMINAL.Output("LIST OF COMMANDS:");
+                    TERMINAL.Output("/leave - leaves the server");
+                    TERMINAL.Output("/list - lists the clients connected");
+                    TERMINAL.Output("/emoji <emoji> - sends an emoji, like 'fire' or 'nerd'");
+                }
                 //send a message
                 else
                 {
@@ -533,6 +554,21 @@ class Program
         {
             Console.WriteLine(e.ToString());
         }
+    }
+
+    //make sure we send disconnect signal 
+    private static void Client_OnClosedClient()
+    {
+        if(CLIENT_SOCKET == null) { return; }
+        var message = Encoding.Unicode.GetBytes(USERNAME);
+        var final = new byte[message.Length + 2];
+        final[0] = CLIENT_LEFT_CODE;
+        final[^1] = (byte)'\r';
+        Array.Copy(message, 0, final, 1, message.Length);
+        int byteSent = CLIENT_SOCKET.Send(final);
+        CLIENT_SOCKET.Shutdown(SocketShutdown.Both);
+        CLIENT_SOCKET.Close();
+        CLIENT_SOCKET = null;
     }
 
     private static void Client_ListenForMessage()

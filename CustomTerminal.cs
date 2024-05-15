@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text;
 using Raylib_cs;
 
 namespace comsec
@@ -20,6 +21,8 @@ namespace comsec
         public static CustomTerminal? TERMINAL; //there can only be one so this is fine
         private Color BACKGROUND_COLOUR, TEXT_COLOUR, INPUT_COLOUR;
         public static Dictionary<string,Texture2D>? EMOJIS;
+
+        private Action? WINDOW_CLOSED;
 
         #region Helper funcs
         private static bool GetKeyDown(KeyboardKey key)
@@ -60,7 +63,7 @@ namespace comsec
         /// <param name="width">The width of the window</param>
         /// <param name="height">The height of the window</param>
         /// <param name="windowText">The text in the top of the window</param>
-        public CustomTerminal(int width, int height, string windowText)
+        public CustomTerminal(int width, int height, string windowText, Action onwindowclose)
 		{
             TERMINAL = this;
             WIDTH = width;
@@ -75,6 +78,7 @@ namespace comsec
             BACKGROUND_COLOUR = Color.White;
             TEXT_COLOUR = Color.Black;
             INPUT_COLOUR = Color.LightGray; //input colour
+            WINDOW_CLOSED = onwindowclose;
             WindowUpdateThread();
 
         }
@@ -86,6 +90,22 @@ namespace comsec
             Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.TransparentWindow);
             Raylib.InitWindow(WIDTH, HEIGHT, WINDOWTEXT);
             INIT = true;
+
+            //set the working directory correctly on mac, yes we have to use pointers im sorry goofy ahh stupid C integration thibng ffs
+            if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX))
+            {
+                string str = AppContext.BaseDirectory;
+                byte[] bytes = Encoding.ASCII.GetBytes(str);
+                unsafe
+                {
+                    fixed (byte* p = bytes)
+                    {
+                        sbyte* sp = (sbyte*)p;
+                        //SP is now what you want
+                        Raylib.ChangeDirectory(sp);
+                    }
+                }
+            }
 
             Font font = Raylib.GetFontDefault();
             if (!Directory.Exists(AppContext.BaseDirectory + "/resources")) { EMOJIS = new(); Console.WriteLine("Uh oh, resources directory is missing, thats not good."); }
@@ -126,17 +146,19 @@ namespace comsec
                 if((HEIGHT - 50 - (20*(MESSAGES.Count+1)) + scrolloffset + (int) scroll < 0)) { scrolloffset += (int)scroll; }
                 for (int i = 0; i < MESSAGES.Count; i++)
                 {
+                    var ypos = HEIGHT - 50 - (20 * (i + 1)) + scrolloffset;
+                    if(ypos < 0) { return; }
                     //its an emoji, render it as such
                     if (MESSAGES[i].Split(' ').Length==3 && MESSAGES[i].Split(' ')[1] == "/emoji" && EMOJIS.ContainsKey(MESSAGES[i].Split(' ')[2].ToLower()))
                     {
                         string str = MESSAGES[i].Split(' ')[0];
-                        Raylib.DrawTextEx(font, str, new System.Numerics.Vector2(10, HEIGHT - 50 - (20 * (i + 1)) + scrolloffset), 20, 1, TEXT_COLOUR);
+                        Raylib.DrawTextEx(font, str, new System.Numerics.Vector2(10, ypos), 20, 1, TEXT_COLOUR);
                         var width = (int)Raylib.MeasureTextEx(font, str, 30, 1).X;
 
                         var tex = EMOJIS[MESSAGES[i].Split(' ')[2].ToLower()];
-                        Raylib.DrawTextureEx(tex, new System.Numerics.Vector2(width-20, HEIGHT - 50 - (20 * (i + 1)) + scrolloffset), 0, 20f / tex.Height, Color.White);
+                        Raylib.DrawTextureEx(tex, new System.Numerics.Vector2(width-15, ypos), 0, 20f / tex.Height, Color.White);
                     }
-                    else { Raylib.DrawTextEx(font, MESSAGES[i], new System.Numerics.Vector2(10, HEIGHT - 50 - (20 * (i + 1)) + scrolloffset), 20, 1, TEXT_COLOUR); }
+                    else { Raylib.DrawTextEx(font, MESSAGES[i], new System.Numerics.Vector2(10, ypos), 20, 1, TEXT_COLOUR); }
                 }
 
                 #region Input field
@@ -178,6 +200,7 @@ namespace comsec
 
                 Raylib.EndDrawing();
             }
+            WINDOW_CLOSED?.Invoke();
 
             Raylib.CloseWindow();
             Environment.Exit(0);
@@ -259,9 +282,14 @@ namespace comsec
             BACKGROUND_COLOUR = col;
             try
             {
-                if (col.A <= 100) { col.A = 100; }
-                if (col.A > 0 && col.A <= 255) { Raylib.SetWindowOpacity(col.A / 255f); }
-                else { Raylib.SetWindowOpacity(255f); }
+                if(System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+                {
+                    Console.WriteLine("Maybe fix the memory issue maybe!");
+                }
+                else
+                {
+                    Raylib.SetWindowOpacity(col.A < 100 ? 100 / 255f : col.A);
+                }
             }
             catch
             {
