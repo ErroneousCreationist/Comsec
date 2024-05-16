@@ -5,6 +5,7 @@ using System.Threading;
 using System.Text;
 using Raylib_cs;
 using System.IO;
+using System.Linq;
 //using System;
 
 namespace comsec;
@@ -27,7 +28,7 @@ struct ConnectedClient
 
 class Program
 {
-    public const string VERSION = "0.5";
+    public const string VERSION = "0.5.2";
     private static string? USERNAME;
     private static string? SANITISED_USERNAME;
 
@@ -47,6 +48,8 @@ class Program
     private static List<ConnectedClient>? CLIENTS;
     private static string[] ARGS;
     private static int EXCEPTIONLOOPS;
+
+    private static List<string>? CONNS_FROM_IPS;
 
     static bool IsClientConnected(Socket client)
     {
@@ -83,6 +86,7 @@ class Program
         Console.OutputEncoding = Encoding.Unicode;
         ARGS = args;
         CLIENTS = new();
+        CONNS_FROM_IPS = new();
         if (args.Length == 1)
         {
             if (args[0] != "-server") { return; }
@@ -140,6 +144,8 @@ class Program
 
     private static void Selection()
     {
+        CLIENTS = new();
+        CONNS_FROM_IPS = new();
         TERMINAL.Output($"Press 1 to host room, Press 2 to join room, Press 3 to change settings, Press 4 to change username");
         var clser = TERMINAL.InputKey();
         if (clser == '1') { TERMINAL.Clear(); StartHostRoom(); }
@@ -277,10 +283,13 @@ class Program
             {
                 if (SERVER_SOCKET == null) { return; }
                 var client = SERVER_SOCKET.Accept();
+                //if we have a suspicious amount of connections from the same ip address, stop connections from it! (make it 2 to allow me to test my own program lmao)
+                if(CONNS_FROM_IPS.Where(x => x != null && x == ((IPEndPoint)client.RemoteEndPoint).Address.ToString()).Count() >= 2) { Console.WriteLine("Warning! IP "+ ((IPEndPoint)client.RemoteEndPoint).Address.ToString() + " has a suspicious number of conns. Blocking further conns!"); client.Disconnect(false); client.Shutdown(SocketShutdown.Both); continue; }
                 if (client != null && !IsClientConnected(client))
                 {
                     Thread thread = new(new ParameterizedThreadStart(ListenForMessage));
                     CLIENTS.Add(new ConnectedClient(client, thread, ""));
+                    CONNS_FROM_IPS.Add(((IPEndPoint)client.RemoteEndPoint).Address.ToString());
                     Thread.Sleep(10);
                     thread.Start(CLIENTS.Count - 1);
                 }
@@ -295,7 +304,7 @@ class Program
 
     private static void ListenForMessage(object? data)
     {
-        if (data == null || CLIENTS==null || SERVER_SOCKET == null) { return; }
+        if (data == null || CLIENTS==null || CLIENTS.Count==0 || SERVER_SOCKET == null) { return; }
         int id = (int)data;
         if (CLIENTS[id].ClientDisconnecting || CLIENTS[id].socket==null) { return; } //end thread if we lose connection or something
         byte[] buffer = new byte[1024];
@@ -333,6 +342,7 @@ class Program
             sent[^1] = (byte)'\r';
             Array.Copy(username, 0, sent, 1, username.Length);
             CLIENTS[id] = new(CLIENTS[id].socket, Thread.CurrentThread, CLIENTS[id].Username, true); //mark as disconnecting
+            if (CONNS_FROM_IPS.Contains(((IPEndPoint)CLIENTS[id].socket.RemoteEndPoint).Address.ToString())) { CONNS_FROM_IPS.Remove(((IPEndPoint)CLIENTS[id].socket.RemoteEndPoint).Address.ToString()); }
             for (int i = 0; i < CLIENTS.Count; i++)
             {
                 if (i == id) { continue; }
@@ -399,6 +409,7 @@ class Program
                     byte[] sent = new byte[totallen];
                     Array.Copy(buffer, sent, totallen);
                     CLIENTS[id] = new(CLIENTS[id].socket, Thread.CurrentThread, CLIENTS[id].Username, true); //mark as disconnecting
+                    if (CONNS_FROM_IPS.Contains(((IPEndPoint)CLIENTS[id].socket.RemoteEndPoint).Address.ToString())) { CONNS_FROM_IPS.Remove(((IPEndPoint)CLIENTS[id].socket.RemoteEndPoint).Address.ToString()); }
                     for (int i = 0; i < CLIENTS.Count; i++)
                     {
                         if (i == id) { continue; }
@@ -557,7 +568,7 @@ class Program
                             if (str.Length >= 40) { TERMINAL.Output(str[..^2]); str = ""; }
                         }
                     }
-                    else if (!CustomTerminal.EMOJIS.ContainsKey(CurrText.Split(' ')[1])) { TERMINAL.Output("No emoji called " + CurrText.Split(']')[1].Split(' ')[1]); continue; }
+                    else if (!CustomTerminal.EMOJIS.ContainsKey(CurrText.Split(' ')[1])) { TERMINAL.Output("No emoji called " + CurrText.Split(' ')[1]); continue; }
                     else
                     {
                         var message = Encoding.Unicode.GetBytes("[" + USERNAME + "]: " + CurrText);
@@ -630,9 +641,16 @@ class Program
             catch(Exception e)
             {
                 Console.WriteLine(e.ToString());
-                EXCEPTIONLOOPS++;
-                if (EXCEPTIONLOOPS >= 100) { EXCEPTIONLOOPS = 0; return; }
-                continue;
+                TERMINAL.Clear();
+                TERMINAL.Output("Error recieving! Connection lost! Press any key to continue.");
+                TERMINAL.InputKey();
+                TERMINAL.Clear();
+                Selection();
+                if (CLIENT_SOCKET.Connected) { CLIENT_SOCKET.Disconnect(false); }
+                CLIENT_SOCKET.Shutdown(SocketShutdown.Both);
+                CLIENT_SOCKET.Close();
+                CLIENT_SOCKET = null;
+                return;
             }
         }
         if(totallen<=0)
