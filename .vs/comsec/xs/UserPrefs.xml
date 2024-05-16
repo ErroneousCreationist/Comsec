@@ -2,16 +2,16 @@
   <MonoDevelop.Ide.DebuggingService.PinnedWatches />
   <MonoDevelop.Ide.ItemProperties.comsec PreferredExecutionTarget="MonoDevelop.Default" />
   <MultiItemStartupConfigurations />
-  <MonoDevelop.Ide.Workbench ActiveDocument="CustomTerminal.cs">
+  <MonoDevelop.Ide.Workbench ActiveDocument="Program.cs">
     <Files>
-      <File FileName="Program.cs" Line="60" Column="29" />
-      <File FileName="CustomTerminal.cs" Line="92" Column="57" />
+      <File FileName="Program.cs" Line="536" Column="77" />
+      <File FileName="CustomTerminal.cs" Line="154" Column="22" />
     </Files>
     <Pads>
       <Pad Id="ProjectPad">
         <State name="__root__">
           <Node name="comsec">
-            <Node name="comsec" selected="True">
+            <Node name="comsec">
               <Node name="Properties" expanded="True">
                 <Node name="PublishProfiles" expanded="True" />
               </Node>

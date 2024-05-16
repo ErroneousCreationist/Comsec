@@ -21,6 +21,7 @@ namespace comsec
         public static CustomTerminal? TERMINAL; //there can only be one so this is fine
         private Color BACKGROUND_COLOUR, TEXT_COLOUR, INPUT_COLOUR;
         public static Dictionary<string,Texture2D>? EMOJIS;
+        private bool KILL_PREV_INPUT;
 
         private Action? WINDOW_CLOSED;
 
@@ -227,15 +228,19 @@ namespace comsec
         }
 
         /// <summary>
-        /// Waits for input from the terminal (pauses current thread)
+        /// Waits for input from the terminal (pauses current thread) 
         /// </summary>
-        /// <returns>text from the input</returns>
-        public string Input(int maxlength = 100)
+        /// <returns>text from the input, returns null if interrupted by new input</returns>
+        public string? Input(int maxlength = 50)
         {
+            KILL_PREV_INPUT = true;
             MaxLength = maxlength;
             RecievingInput = true;
+            Thread.Sleep(2);
+            KILL_PREV_INPUT = false;
             while(!Inputed)
             {
+                if (KILL_PREV_INPUT) { return null; }
                 Thread.Sleep(1);
             }
             string input = CurrText;

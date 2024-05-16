@@ -130,9 +130,11 @@ class Program
 
         TERMINAL.Output("Enter username: ");
         var s = TERMINAL.Input();
-        if (s == null || string.IsNullOrWhiteSpace(s) || s.Length > 20 || s.Contains('\\')) { TERMINAL.Clear(); TERMINAL.Output("Enter a valid username please, under 20 characters, without \\. Press any key to restart..."); _ = TERMINAL.InputKey(); Username(); return; }
+        if (s == null || string.IsNullOrWhiteSpace(s) || s.Length > 20 || s.Contains('\\') || s.Contains(']')) { TERMINAL.Clear(); TERMINAL.Output("Enter a valid username please, under 20 characters, without \\ or ]. Press any key to restart..."); _ = TERMINAL.InputKey(); Username(); return; }
         USERNAME = s;
         SANITISED_USERNAME = s.Replace(".", "").Replace("/", "").Replace("@", "").Replace("\\", "").Replace(",", "").ToLower();
+        TERMINAL.Clear();
+        TERMINAL.Output("Username: " + USERNAME);
         Selection();
     }
 
@@ -321,10 +323,26 @@ class Program
                 return;
             }
         }
-        if (totallen <= 0) {
-            ListenForMessage(data);
+        if (totallen <= 0) { //disconnect client due to loss of connection
+            Thread.Sleep(10);
+            CLIENTS[id] = new(CLIENTS[id].socket, Thread.CurrentThread, CLIENTS[id].Username, true);
+            Console.WriteLine(CLIENTS[id].Username + " Disconnected");
+            var username = Encoding.Unicode.GetBytes(CLIENTS[id].Username);
+            byte[] sent = new byte[username.Length+2];
+            sent[0] = RECIEVE_CLIENT_LEFT_CODE;
+            sent[^1] = (byte)'\r';
+            Array.Copy(username, 0, sent, 1, username.Length);
+            CLIENTS[id] = new(CLIENTS[id].socket, Thread.CurrentThread, CLIENTS[id].Username, true); //mark as disconnecting
+            for (int i = 0; i < CLIENTS.Count; i++)
+            {
+                if (i == id) { continue; }
+                if (CLIENTS[i].ClientDisconnecting) { continue; }
+                CLIENTS[i].socket.Send(sent);
+            }
+
             return;
         }
+        if (buffer[0] != CLIENT_CONNECTED_CODE && CLIENTS[id].Username == "") { Console.WriteLine("Connection is erroneous, kicking client."); CLIENTS[id].socket.Disconnect(false); CLIENTS[id].socket.Close(); CLIENTS[id] = new(CLIENTS[id].socket, Thread.CurrentThread, CLIENTS[id].Username, true); return; } //if our first message wasn't handing over username that we connected, then kick the connection
         switch (buffer[0]) //first byte of any message is the identifier
         {
             case CLIENT_CONNECTED_CODE:
@@ -333,7 +351,7 @@ class Program
                     buffer[0] = RECIEVE_CLIENT_JOIN_CODE;
                     byte[] sent = new byte[totallen];
                     Array.Copy(buffer, sent, totallen);
-                    CLIENTS[id] = new(CLIENTS[id].socket, Thread.CurrentThread, Encoding.ASCII.GetString(buffer, 1, totallen - 2), false); //mark as disconnecting
+                    CLIENTS[id] = new(CLIENTS[id].socket, Thread.CurrentThread, Encoding.Unicode.GetString(buffer, 1, totallen - 2), false); //mark as disconnecting
                     for (int i = 0; i < CLIENTS.Count; i++)
                     {
                         if (CLIENTS[i].ClientDisconnecting) { continue; }
@@ -350,10 +368,12 @@ class Program
                         if (CLIENTS[i].ClientDisconnecting) { continue; }//yeah well we can't just remove them from the list so im going to have to compromise :skull:
                         fulllist += CLIENTS[i].Username + "\\";
                     }
-                    byte[] sent = new byte[fulllist.Length+2];
+                    fulllist = fulllist[..^1];
+                    Console.WriteLine(fulllist);
+                    var listbytes = Encoding.Unicode.GetBytes(fulllist);
+                    byte[] sent = new byte[listbytes.Length+2];
                     sent[0] = RECIEVE_CLIENT_LIST_CODE;
                     sent[^1] = (byte)'\r';
-                    var listbytes = Encoding.Unicode.GetBytes(fulllist);
                     Array.Copy(listbytes, 0, sent, 1, listbytes.Length);
                     CLIENTS[id].socket.Send(sent);
                     break;
@@ -477,6 +497,7 @@ class Program
             while(true)
             {
                 var CurrText = TERMINAL.Input();
+                if (CurrText == null) { return; }
                 //Console.WriteLine("\n");
                 if (string.IsNullOrWhiteSpace(CurrText)) { continue; }
 
@@ -614,6 +635,19 @@ class Program
                 continue;
             }
         }
+        if(totallen<=0)
+        {
+            TERMINAL.Clear();
+            TERMINAL.Output("Lost connection! Press any key to continue.");
+            TERMINAL.InputKey();
+            TERMINAL.Clear();
+            Selection();
+            if (CLIENT_SOCKET.Connected) { CLIENT_SOCKET.Disconnect(false); }
+            CLIENT_SOCKET.Shutdown(SocketShutdown.Both);
+            CLIENT_SOCKET.Close();
+            CLIENT_SOCKET = null;
+            return;
+        }
         switch (buffer[0]) //first byte of any message is the identifier
         {
             case CLIENT_CONNECTED_CODE:
@@ -638,8 +672,8 @@ class Program
                 TERMINAL.Output(Encoding.Unicode.GetString(buffer, 1, totallen - 2));
                 break;
             case RECIEVE_CLIENT_LIST_CODE:
-                string list = Encoding.Unicode.GetString(buffer, 1, totallen - 2);
-                TERMINAL.Output("Connected clients: "+list.Replace("\\", ", "));
+                string list = Encoding.Unicode.GetString(buffer, 1, totallen - 2).Replace("\\", ", ");
+                TERMINAL.Output("Connected clients: "+list);
                 break;
             default:
                 TERMINAL.Output("Recieved erroneous message with code " + buffer[0] + ", discarding");
